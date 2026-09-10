@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { getPeriodRange, parsePeriod } from "@/lib/period";
-import { getTrueLayerStatus } from "@/lib/truelayer";
+import { getGoCardlessStatus } from "@/lib/gocardless";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CategoryChart } from "@/components/dashboard/category-chart";
 import { CashflowChart } from "@/components/dashboard/cashflow-chart";
@@ -116,7 +116,7 @@ export default async function DashboardPage({
     };
   });
 
-  const tl = getTrueLayerStatus();
+  const gc = getGoCardlessStatus();
   const empty = accounts.length === 0;
   const connProps = mapConnections(connections);
 
@@ -146,9 +146,9 @@ export default async function DashboardPage({
             <CardHeader>
               <CardTitle>Connect your bank</CardTitle>
               <CardDescription>
-                SpendWise uses TrueLayer Open Banking to securely link UK and EU banks — Revolut,
-                Monzo, Starling, and high-street providers. No mock banks here: once TrueLayer live
-                credentials are set on the server, you authorise in your real bank app.
+                SpendWise uses GoCardless Bank Account Data to securely link UK and EU banks —
+                Revolut, Monzo, Starling, and high-street providers. Pick your bank, authorise in
+                the real bank app, and balances sync automatically.
               </CardDescription>
             </CardHeader>
             <CardContent className="text-sm text-zinc-400">
@@ -158,9 +158,8 @@ export default async function DashboardPage({
             </CardContent>
           </Card>
           <ConnectBankCard
-            configured={tl.configured}
-            env={tl.env}
-            redirectUri={tl.redirectUri}
+            configured={gc.configured}
+            redirectUri={gc.redirectUri}
             connections={connProps}
           />
         </div>
@@ -233,9 +232,8 @@ export default async function DashboardPage({
               </CardContent>
             </Card>
             <ConnectBankCard
-              configured={tl.configured}
-              env={tl.env}
-              redirectUri={tl.redirectUri}
+              configured={gc.configured}
+              redirectUri={gc.redirectUri}
               connections={connProps}
             />
           </div>

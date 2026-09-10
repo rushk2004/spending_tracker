@@ -17,7 +17,7 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "SpendWise — Personal Finance",
   description:
-    "Connect UK & EU banks with TrueLayer Open Banking. See balances, spending, and cashflow in a calm, detailed dashboard.",
+    "Connect UK & EU banks with GoCardless Bank Account Data. See balances, spending, and cashflow in a calm, detailed dashboard.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

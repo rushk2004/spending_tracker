@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { getTrueLayerStatus } from "@/lib/truelayer";
+import { getGoCardlessStatus } from "@/lib/gocardless";
 
 export async function GET() {
   const session = await requireUser();
@@ -14,7 +14,7 @@ export async function GET() {
   });
 
   return NextResponse.json({
-    ...getTrueLayerStatus(),
+    ...getGoCardlessStatus(),
     connections: connections.map((c) => ({
       id: c.id,
       provider: c.provider,

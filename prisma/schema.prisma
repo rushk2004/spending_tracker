@@ -47,7 +47,7 @@ model BankConnection {
   id              String    @id @default(cuid())
   userId          String
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider        String    @default("truelayer")
+  provider        String    @default("gocardless")
   accessTokenEnc  String
   refreshTokenEnc String?
   expiresAt       DateTime?

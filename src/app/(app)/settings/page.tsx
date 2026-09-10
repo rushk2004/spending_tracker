@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
-import { getTrueLayerStatus } from "@/lib/truelayer";
+import { getGoCardlessStatus } from "@/lib/gocardless";
 import { getOAuthAvailability } from "@/lib/oauth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DemoButton } from "@/components/dashboard/demo-button";
@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 
 const ERROR_COPY: Record<string, string> = {
   not_configured:
-    "TrueLayer credentials are missing. Set TRUELAYER_CLIENT_ID, TRUELAYER_CLIENT_SECRET, and TRUELAYER_ENV=live.",
+    "GoCardless credentials are missing. Set GOCARDLESS_SECRET_ID and GOCARDLESS_SECRET_KEY from https://bankaccountdata.gocardless.com/",
   invalid_state: "Bank connect session expired. Please try Connect bank again.",
   connect_failed: "Could not finish connecting your bank.",
   access_denied: "You cancelled bank authorisation.",
@@ -32,7 +32,7 @@ export default async function SettingsPage({
     }),
   ]);
 
-  const tl = getTrueLayerStatus();
+  const gc = getGoCardlessStatus();
   const oauth = getOAuthAvailability();
   const errKey = searchParams?.bank_error;
   const errDetail = searchParams?.bank_detail;
@@ -69,9 +69,8 @@ export default async function SettingsPage({
       </Card>
 
       <ConnectBankCard
-        configured={tl.configured}
-        env={tl.env}
-        redirectUri={tl.redirectUri}
+        configured={gc.configured}
+        redirectUri={gc.redirectUri}
         connections={connections.map((c) => ({
           id: c.id,
           provider: c.provider,
@@ -108,15 +107,19 @@ export default async function SettingsPage({
         </CardHeader>
         <CardContent className="space-y-1 text-sm text-zinc-400">
           <p>
-            TrueLayer:{" "}
-            {tl.configured
-              ? `configured (${tl.env})`
-              : `not configured — set live Client ID/Secret (${tl.env} mode)`}
+            GoCardless Bank Account Data:{" "}
+            {gc.configured ? "configured" : "not configured — set SECRET_ID / SECRET_KEY"}
+          </p>
+          <p>
+            Portal:{" "}
+            <a className="text-brand hover:underline" href={gc.portalUrl} target="_blank" rel="noreferrer">
+              {gc.portalUrl}
+            </a>
           </p>
           <p>Google OAuth: {oauth.google ? "on" : "off"}</p>
           <p>X (Twitter) OAuth: {oauth.twitter ? "on" : "off"}</p>
           <p>
-            Redirect URI: <code className="text-zinc-300">{tl.redirectUri}</code>
+            Redirect URI: <code className="text-zinc-300">{gc.redirectUri}</code>
           </p>
         </CardContent>
       </Card>

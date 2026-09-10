@@ -1,70 +1,72 @@
-import { subDays } from "date-fns";
+import { format, subDays } from "date-fns";
 import { prisma } from "./prisma";
 import {
-  decryptToken,
-  encryptToken,
-  fetchAccounts,
-  fetchBalance,
+  decryptSecret,
+  deleteRequisition,
+  fetchAccountDetails,
+  fetchAccountMetadata,
+  fetchBalances,
   fetchTransactions,
+  getRequisition,
+  isGoCardlessConfigured,
   mapAccountType,
-  refreshAccessToken,
-  isTrueLayerConfigured,
-  buildMockBankBundle,
-} from "./truelayer";
-
-async function getValidAccessToken(connectionId: string) {
-  const conn = await prisma.bankConnection.findUnique({ where: { id: connectionId } });
-  if (!conn) throw new Error("Connection not found");
-
-  if (conn.provider === "mock") {
-    return { conn, accessToken: "mock" };
-  }
-
-  let accessToken = decryptToken(conn.accessTokenEnc);
-  const needsRefresh =
-    conn.expiresAt && conn.expiresAt.getTime() < Date.now() + 60_000 && conn.refreshTokenEnc;
-
-  if (needsRefresh && isTrueLayerConfigured() && conn.refreshTokenEnc) {
-    const refreshed = await refreshAccessToken(decryptToken(conn.refreshTokenEnc));
-    accessToken = refreshed.access_token;
-    await prisma.bankConnection.update({
-      where: { id: conn.id },
-      data: {
-        accessTokenEnc: encryptToken(refreshed.access_token),
-        refreshTokenEnc: refreshed.refresh_token
-          ? encryptToken(refreshed.refresh_token)
-          : conn.refreshTokenEnc,
-        expiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
-      },
-    });
-  }
-
-  return { conn, accessToken };
-}
+  pickBalanceAmount,
+  transactionDate,
+  transactionDescription,
+  transactionExternalId,
+  transactionMerchant,
+} from "./gocardless";
 
 export async function syncBankConnection(connectionId: string, userId: string) {
-  const { conn, accessToken } = await getValidAccessToken(connectionId);
+  const conn = await prisma.bankConnection.findUnique({ where: { id: connectionId } });
+  if (!conn) throw new Error("Connection not found");
   if (conn.userId !== userId) throw new Error("Unauthorized");
 
-  if (conn.provider === "mock") {
-    return syncMockConnection(conn.id, userId, conn.institutionId || "revolut");
+  if (conn.provider !== "gocardless") {
+    throw new Error(`Unsupported bank provider: ${conn.provider}`);
+  }
+  if (!isGoCardlessConfigured()) {
+    throw new Error("GoCardless is not configured");
   }
 
-  const tlAccounts = await fetchAccounts(accessToken);
-  const fromIso = subDays(new Date(), 90).toISOString();
-  let txCount = 0;
+  const requisitionId = decryptSecret(conn.accessTokenEnc);
+  const requisition = await getRequisition(requisitionId);
+  const accountIds = requisition.accounts || [];
 
-  for (const tla of tlAccounts) {
-    const bal = await fetchBalance(accessToken, tla.account_id);
-    const balance = bal?.current ?? bal?.available ?? 0;
-    const last4 = tla.account_number?.number?.slice(-4) || null;
-    const type = mapAccountType(tla.account_type);
+  if (!accountIds.length) {
+    await prisma.bankConnection.update({
+      where: { id: conn.id },
+      data: { status: requisition.status === "LN" ? "active" : "pending", lastSyncedAt: new Date() },
+    });
+    return { accounts: 0, transactions: 0 };
+  }
+
+  const dateFrom = format(subDays(new Date(), 90), "yyyy-MM-dd");
+  let txCount = 0;
+  const institutionName = conn.institutionName || "Connected bank";
+  let institutionId = conn.institutionId || requisition.institution_id || null;
+
+  for (const accountId of accountIds) {
+    const [meta, details, balances, txs] = await Promise.all([
+      fetchAccountMetadata(accountId).catch(() => null),
+      fetchAccountDetails(accountId).catch(() => null),
+      fetchBalances(accountId),
+      fetchTransactions(accountId, dateFrom),
+    ]);
+
+    if (meta?.institution_id) institutionId = meta.institution_id;
+    const bal = pickBalanceAmount(balances);
+    const iban = details?.iban || meta?.iban || "";
+    const last4 = iban ? iban.replace(/\s/g, "").slice(-4) : null;
+    const type = mapAccountType(details?.cashAccountType, details?.product);
     const nickname =
-      tla.display_name ||
-      `${tla.provider?.display_name || conn.institutionName || "Bank"} ${type}`;
+      details?.name ||
+      details?.product ||
+      meta?.owner_name ||
+      `${institutionName} ${type === "checking" ? "Current" : type}`;
 
     let account = await prisma.account.findFirst({
-      where: { userId, externalId: tla.account_id },
+      where: { userId, externalId: accountId },
     });
 
     if (account) {
@@ -74,8 +76,8 @@ export async function syncBankConnection(connectionId: string, userId: string) {
           nickname,
           type,
           last4,
-          balance,
-          currency: tla.currency || "GBP",
+          balance: bal.amount,
+          currency: bal.currency || details?.currency || "GBP",
           bankConnectionId: conn.id,
         },
       });
@@ -86,142 +88,72 @@ export async function syncBankConnection(connectionId: string, userId: string) {
           nickname,
           type,
           last4,
-          balance,
-          currency: tla.currency || "GBP",
-          externalId: tla.account_id,
+          balance: bal.amount,
+          currency: bal.currency || details?.currency || "GBP",
+          externalId: accountId,
           bankConnectionId: conn.id,
         },
       });
     }
 
-    const txs = await fetchTransactions(accessToken, tla.account_id, fromIso);
-    for (const t of txs) {
+    const allTx = [...txs.booked, ...txs.pending];
+    for (const t of allTx) {
+      const externalId = transactionExternalId(t, accountId);
       const existing = await prisma.transaction.findFirst({
-        where: { userId, externalId: t.transaction_id },
+        where: { userId, externalId },
       });
       if (existing) continue;
-      const amount = Math.abs(t.amount);
-      const txType = t.amount >= 0 ? "income" : "expense";
+
+      const rawAmount = parseFloat(t.transactionAmount.amount);
+      if (Number.isNaN(rawAmount)) continue;
+
       await prisma.transaction.create({
         data: {
           userId,
           accountId: account.id,
-          type: txType,
-          amount,
-          date: new Date(t.timestamp),
-          description: t.description || null,
-          merchant: t.merchant_name || null,
-          externalId: t.transaction_id,
+          type: rawAmount >= 0 ? "income" : "expense",
+          amount: Math.abs(rawAmount),
+          date: transactionDate(t),
+          description: transactionDescription(t),
+          merchant: transactionMerchant(t),
+          externalId,
         },
       });
       txCount++;
     }
-
-    // Recompute balance from TrueLayer balance (source of truth), already set above
   }
-
-  // Prefer provider display name from first account
-  const institutionName =
-    tlAccounts[0]?.provider?.display_name || conn.institutionName || "Connected bank";
 
   await prisma.bankConnection.update({
     where: { id: conn.id },
     data: {
       lastSyncedAt: new Date(),
       institutionName,
-      institutionId: tlAccounts[0]?.provider?.provider_id || conn.institutionId,
+      institutionId,
       status: "active",
     },
   });
 
-  return { accounts: tlAccounts.length, transactions: txCount };
+  return { accounts: accountIds.length, transactions: txCount };
 }
 
-async function syncMockConnection(connectionId: string, userId: string, institutionId: string) {
-  const inst = (["revolut", "monzo", "starling"].includes(institutionId)
-    ? institutionId
-    : "revolut") as "revolut" | "monzo" | "starling";
-  const bundle = buildMockBankBundle(inst);
-  let txCount = 0;
+export async function revokeBankConnection(connectionId: string, userId: string) {
+  const conn = await prisma.bankConnection.findFirst({
+    where: { id: connectionId, userId },
+  });
+  if (!conn) return;
 
-  for (const a of bundle.accounts) {
-    let account = await prisma.account.findFirst({
-      where: { userId, externalId: a.account_id },
-    });
-    const type = mapAccountType(a.account_type);
-    if (account) {
-      account = await prisma.account.update({
-        where: { id: account.id },
-        data: {
-          nickname: a.display_name,
-          type,
-          last4: a.account_number.number.slice(-4),
-          balance: a.balance,
-          currency: a.currency,
-          bankConnectionId: connectionId,
-        },
-      });
-    } else {
-      account = await prisma.account.create({
-        data: {
-          userId,
-          nickname: a.display_name,
-          type,
-          last4: a.account_number.number.slice(-4),
-          balance: a.balance,
-          currency: a.currency,
-          externalId: a.account_id,
-          bankConnectionId: connectionId,
-        },
-      });
-    }
-
-    for (const t of bundle.transactions.filter((x) => x.account_id === a.account_id)) {
-      const existing = await prisma.transaction.findFirst({
-        where: { userId, externalId: t.transaction_id },
-      });
-      if (existing) continue;
-      await prisma.transaction.create({
-        data: {
-          userId,
-          accountId: account.id,
-          type: t.amount >= 0 ? "income" : "expense",
-          amount: Math.abs(t.amount),
-          date: new Date(t.timestamp),
-          description: t.description,
-          merchant: t.merchant_name,
-          externalId: t.transaction_id,
-        },
-      });
-      txCount++;
+  if (conn.provider === "gocardless" && isGoCardlessConfigured()) {
+    try {
+      const requisitionId = decryptSecret(conn.accessTokenEnc);
+      await deleteRequisition(requisitionId);
+    } catch {
+      // ignore revoke errors
     }
   }
 
-  await prisma.bankConnection.update({
-    where: { id: connectionId },
-    data: {
-      lastSyncedAt: new Date(),
-      institutionName: bundle.institution.name,
-      institutionId: bundle.institution.id,
-      status: "active",
-    },
+  await prisma.account.updateMany({
+    where: { bankConnectionId: conn.id },
+    data: { bankConnectionId: null },
   });
-
-  return { accounts: bundle.accounts.length, transactions: txCount };
-}
-
-export async function createMockConnection(userId: string, institution: "revolut" | "monzo" | "starling") {
-  const bundle = buildMockBankBundle(institution);
-  const conn = await prisma.bankConnection.create({
-    data: {
-      userId,
-      provider: "mock",
-      accessTokenEnc: encryptToken(`mock-${institution}`),
-      institutionId: bundle.institution.id,
-      institutionName: bundle.institution.name,
-      status: "active",
-    },
-  });
-  const result = await syncMockConnection(conn.id, userId, institution);
-  return { connectionId: conn.id, ...result };
+  await prisma.bankConnection.delete({ where: { id: conn.id } });
 }

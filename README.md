@@ -1,8 +1,8 @@
 # SpendWise — Personal Finance
 
-Production-oriented personal finance app for **UK/EU** banking: connect **Revolut, Monzo, Starling** and other providers via **TrueLayer Open Banking (live)**, see **together** totals and **per-account** balance + period spending, with email login that works from any device.
+Production-oriented personal finance app for **UK/EU** banking: connect **Revolut, Monzo, Starling** and other providers via **GoCardless Bank Account Data** (formerly Nordigen), see **together** totals and **per-account** balance + period spending, with email login that works from any device.
 
-Stack: **Next.js App Router · TypeScript · Tailwind · Prisma · Postgres · Auth.js · TrueLayer**
+Stack: **Next.js App Router · TypeScript · Tailwind · Prisma · Postgres · Auth.js · GoCardless**
 
 ## Features
 
@@ -12,7 +12,7 @@ Stack: **Next.js App Router · TypeScript · Tailwind · Prisma · Postgres · A
 4. **Money dashboard** — together: total balance, period spend, period income, cashflow; each account: balance + period spend/income + % share bars; category pie; cashflow chart; period selector.
 5. **Account detail** — `/accounts/[id]` with balance and period activity.
 6. **Categories** — defaults on signup + custom.
-7. **TrueLayer Connect Bank** — real Open Banking authorize flow when credentials are set (`TRUELAYER_ENV=live`). Sync shows last synced time, spinner, and clear success/errors. Manual + CSV remain secondary fallbacks.
+7. **GoCardless Connect Bank** — searchable GB (and EU) institution list → bank authorise → sync balances & transactions. Sync shows last synced time, spinner, and clear success/errors. Manual + CSV remain secondary fallbacks.
 8. **Developer extras** — optional sample data lives under **Settings** only (not in the primary Connect bank path).
 
 ## Quick start
@@ -21,14 +21,14 @@ Stack: **Next.js App Router · TypeScript · Tailwind · Prisma · Postgres · A
 cp .env.example .env
 # set AUTH_SECRET (openssl rand -base64 32)
 # set DATABASE_URL to Postgres
-# set TrueLayer live Client ID/Secret (see below)
+# set GoCardless SECRET_ID / SECRET_KEY (see below)
 
 npm install
 npx prisma db push
 npm run dev
 ```
 
-Open http://localhost:3000 → register → **Connect your bank**.
+Open http://localhost:3000 → register → **Connect your bank** → pick Revolut (or any GB bank).
 
 ### Scripts
 
@@ -48,51 +48,41 @@ See `.env.example`.
 | Variable | Required | Notes |
 |----------|----------|-------|
 | `DATABASE_URL` | Yes | Postgres connection string |
-| `AUTH_SECRET` | Yes | Encrypts sessions + bank tokens at rest |
+| `AUTH_SECRET` | Yes | Encrypts sessions + bank linkage secrets at rest |
 | `AUTH_URL` / `NEXTAUTH_URL` | Recommended | e.g. `https://YOUR_DOMAIN` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | Google social login |
 | `TWITTER_CLIENT_ID` / `TWITTER_CLIENT_SECRET` | No | X social login |
-| `TRUELAYER_CLIENT_ID` | Yes for real banks | TrueLayer Console → Application |
-| `TRUELAYER_CLIENT_SECRET` | Yes for real banks | TrueLayer Console → Application |
-| `TRUELAYER_ENV` | Recommended | **`live`** (default). Use `sandbox` only for TrueLayer console mock providers while developing. |
-| `TRUELAYER_REDIRECT_URI` | Yes for bank connect | Must match Console redirect URI exactly |
+| `GOCARDLESS_SECRET_ID` | Yes for real banks | Bank Account Data portal → User secrets |
+| `GOCARDLESS_SECRET_KEY` | Yes for real banks | Bank Account Data portal → User secrets |
+| `GOCARDLESS_REDIRECT_URI` | Recommended | Defaults to `AUTH_URL` + `/api/gocardless/callback` |
 
-Without TrueLayer credentials, the UI shows a clear **Connect your bank** empty state explaining how to add live credentials — it does **not** push mock Revolut/Monzo/Starling as the primary path.
+Without GoCardless secrets, the UI shows a clear empty state with a link to the portal — it does **not** push mock Revolut/Monzo/Starling as the primary path.
 
-## TrueLayer live setup (real UK/EU banks)
+## GoCardless Bank Account Data setup
 
-1. Create an application in the [TrueLayer Console](https://console.truelayer.com/).
-2. Use the **Live** environment (not Sandbox) for production banks such as Revolut, Monzo, Starling, and Open Banking high-street providers.
-3. Enable **Data API** products: accounts, balance, transactions (and cards if needed).
-4. Copy your **Client ID** and **Client Secret**.
-5. Add redirect URIs (exact match required):
-   - Local: `http://localhost:3000/api/truelayer/callback`
-   - Production: `https://YOUR_DOMAIN/api/truelayer/callback`
-6. Set environment variables:
+1. Open the [Bank Account Data portal](https://bankaccountdata.gocardless.com/) and create an account (free tier available).
+2. Create **User secrets** (`secret_id` + `secret_key`).
+3. Set environment variables:
 
 ```bash
-TRUELAYER_CLIENT_ID=...
-TRUELAYER_CLIENT_SECRET=...
-TRUELAYER_ENV=live
-TRUELAYER_REDIRECT_URI=https://YOUR_DOMAIN/api/truelayer/callback
+GOCARDLESS_SECRET_ID=...
+GOCARDLESS_SECRET_KEY=...
+GOCARDLESS_REDIRECT_URI=https://YOUR_DOMAIN/api/gocardless/callback
 AUTH_URL=https://YOUR_DOMAIN
 ```
 
-7. Redeploy / restart the app, sign in, and click **Connect your bank**.
+Local redirect example: `http://localhost:3000/api/gocardless/callback`.
 
-Coverage of specific banks depends on your TrueLayer plan and provider availability (`providers=uk-ob-all`).
-
-### Advanced: TrueLayer sandbox
-
-For TrueLayer’s own mock providers during integration testing, set `TRUELAYER_ENV=sandbox` and use sandbox credentials/redirects from the Console. This is a **dev note only** — the product UI defaults to live messaging.
+4. Redeploy / restart the app, sign in, click **Connect your bank**, search for **Revolut** (or Monzo, Starling, etc.), and authorise in the bank.
 
 ### Connect flow
 
-1. User clicks **Connect your bank**.
-2. Browser redirects to TrueLayer Auth → user selects institution → authorises in bank website/app.
-3. Callback hits `/api/truelayer/callback` → code exchanged for tokens → tokens stored **encrypted** (AES-256-GCM with `AUTH_SECRET`).
-4. Accounts, balances, and transactions are pulled into Prisma models.
-5. **Sync now** refreshes all active TrueLayer connections; last synced time is shown on the Connect card.
+1. User opens the searchable institution list (GB + common EU countries).
+2. Selecting a bank creates a GoCardless **requisition** and redirects to the bank / GoCardless authorise UI.
+3. Callback hits `/api/gocardless/callback` → requisition is stored **encrypted** (AES-256-GCM with `AUTH_SECRET`) → accounts, balances, and transactions are pulled.
+4. **Sync now** refreshes all active GoCardless connections; last synced time is shown on the Connect card.
+
+App-level access tokens are obtained from `secret_id` / `secret_key` and refreshed server-side; end-user bank access is represented by the requisition ID.
 
 ## Social login setup
 
@@ -121,9 +111,9 @@ See `sample-transactions.csv`.
 
 1. Import the GitHub repo.
 2. Use **Postgres** (Neon/Supabase/Vercel Postgres).
-3. Set env vars: `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL=https://YOUR_DOMAIN`, TrueLayer live vars, optional Google/X.
+3. Set env vars: `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL=https://YOUR_DOMAIN`, GoCardless secrets + redirect URI, optional Google/X.
 4. Build: `prisma generate && prisma db push && next build`.
-5. Register TrueLayer + OAuth callback URLs for the production domain.
+5. Ensure `GOCARDLESS_REDIRECT_URI` matches your production domain callback.
 
 ## License
 

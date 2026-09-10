@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { revokeBankConnection } from "@/lib/bank-sync";
 
 export async function POST(req: Request) {
   const session = await requireUser();
@@ -9,18 +10,17 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const connectionId = body.connectionId as string | undefined;
 
-  const connections = connectionId
-    ? await prisma.bankConnection.findMany({
-        where: { id: connectionId, userId: session.userId },
-      })
-    : await prisma.bankConnection.findMany({ where: { userId: session.userId } });
+  if (connectionId) {
+    await revokeBankConnection(connectionId, session.userId);
+    return NextResponse.json({ ok: true, removed: 1 });
+  }
+
+  const connections = await prisma.bankConnection.findMany({
+    where: { userId: session.userId },
+  });
 
   for (const c of connections) {
-    await prisma.account.updateMany({
-      where: { bankConnectionId: c.id },
-      data: { bankConnectionId: null },
-    });
-    await prisma.bankConnection.delete({ where: { id: c.id } });
+    await revokeBankConnection(c.id, session.userId);
   }
 
   return NextResponse.json({ ok: true, removed: connections.length });

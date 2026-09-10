@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { getPeriodRange, parsePeriod } from "@/lib/period";
-import { getTrueLayerStatus } from "@/lib/truelayer";
+import { getGoCardlessStatus } from "@/lib/gocardless";
 import { AccountsManager } from "@/components/accounts/accounts-manager";
 import { ConnectBankCard } from "@/components/banks/connect-bank";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
@@ -52,7 +52,7 @@ export default async function AccountsPage({
     periodSpend: periodTx.filter((t) => t.accountId === a.id).reduce((s, t) => s + t.amount, 0),
   }));
 
-  const tl = getTrueLayerStatus();
+  const gc = getGoCardlessStatus();
 
   return (
     <div className="space-y-6">
@@ -70,8 +70,8 @@ export default async function AccountsPage({
       </div>
 
       <ConnectBankCard
-        configured={tl.configured}
-        env={tl.env}
+        configured={gc.configured}
+        redirectUri={gc.redirectUri}
         connections={connections.map((c) => ({
           id: c.id,
           provider: c.provider,

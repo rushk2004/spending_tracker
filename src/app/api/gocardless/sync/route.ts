@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     }
 
     const connections = await prisma.bankConnection.findMany({
-      where: { userId: session.userId, status: "active", provider: "truelayer" },
+      where: { userId: session.userId, status: "active", provider: "gocardless" },
       orderBy: { updatedAt: "desc" },
     });
 
