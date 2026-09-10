@@ -1,0 +1,6 @@
+date,amount,type,category,merchant,description,account
+2026-08-01,4200.00,income,Salary,Acme Corp,August paycheck,Everyday Checking
+2026-08-03,86.42,expense,Groceries,Whole Foods,Weekly groceries,Everyday Checking
+2026-08-05,42.10,expense,Dining,Sushi Place,Dinner out,Everyday Checking
+2026-08-07,129.99,expense,Shopping,Amazon,Headphones,Travel Rewards
+2026-08-10,65.00,expense,Transport,Shell,Gas fill-up,Everyday Checking
