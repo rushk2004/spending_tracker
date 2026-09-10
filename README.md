@@ -1,32 +1,34 @@
-# SpendWise — Personal Spending Tracker
+# SpendWise — Personal Finance
 
-Emma-style money overview for **UK/EU** banking: connect Revolut, Monzo, Starling and more via **TrueLayer Open Banking**, see **together** totals and **per-account** balance + period spending, with email/social login that works from any device.
+Production-oriented personal finance app for **UK/EU** banking: connect **Revolut, Monzo, Starling** and other providers via **TrueLayer Open Banking (live)**, see **together** totals and **per-account** balance + period spending, with email login that works from any device.
 
-Stack: **Next.js App Router · TypeScript · Tailwind · Prisma · SQLite (local) / Postgres (prod) · Auth.js · TrueLayer**
+Stack: **Next.js App Router · TypeScript · Tailwind · Prisma · Postgres · Auth.js · TrueLayer**
 
 ## Features
 
-1. **Auth** — email/password (bcrypt) + optional Google & X (Twitter) via Auth.js; JWT sessions; protected routes; per-user isolation. Same email across credentials + OAuth links to one user when possible.
-2. **Accounts** — manual CRUD (checking/savings/credit) **or** auto-created from bank sync.
+1. **Auth** — email/password (bcrypt) + optional Google & X (Twitter) via Auth.js; JWT sessions; protected routes; per-user isolation.
+2. **Accounts** — auto-created from bank sync, or manual CRUD (checking/savings/credit) as fallback.
 3. **Transactions** — CRUD + filters/search + CSV import; balances update for manual entries.
-4. **Money dashboard (Emma-style)** — together: total balance, period spend, period income, cashflow; each bank: balance + period spend + % of spend; category pie; cashflow bars; period selector (this month / last month / last 30 days).
+4. **Money dashboard** — together: total balance, period spend, period income, cashflow; each account: balance + period spend/income + % share bars; category pie; cashflow chart; period selector.
 5. **Account detail** — `/accounts/[id]` with balance and period activity.
 6. **Categories** — defaults on signup + custom.
-7. **TrueLayer Connect Bank (required sync path)** — pick institution → authorize in bank app/web → return → accounts, balances, transactions sync. Sandbox/mock demo works without production keys. Manual + CSV remain fallbacks.
-8. **Demo data** button for empty workspaces.
+7. **TrueLayer Connect Bank** — real Open Banking authorize flow when credentials are set (`TRUELAYER_ENV=live`). Sync shows last synced time, spinner, and clear success/errors. Manual + CSV remain secondary fallbacks.
+8. **Developer extras** — optional sample data lives under **Settings** only (not in the primary Connect bank path).
 
 ## Quick start
 
 ```bash
 cp .env.example .env
 # set AUTH_SECRET (openssl rand -base64 32)
+# set DATABASE_URL to Postgres
+# set TrueLayer live Client ID/Secret (see below)
 
 npm install
 npx prisma db push
 npm run dev
 ```
 
-Open http://localhost:3000 → register → **Connect bank** → **Try sandbox banks** (Revolut/Monzo/Starling) or load demo data.
+Open http://localhost:3000 → register → **Connect your bank**.
 
 ### Scripts
 
@@ -45,65 +47,66 @@ See `.env.example`.
 
 | Variable | Required | Notes |
 |----------|----------|-------|
-| `DATABASE_URL` | Yes | `file:./dev.db` locally; Postgres on Vercel |
+| `DATABASE_URL` | Yes | Postgres connection string |
 | `AUTH_SECRET` | Yes | Encrypts sessions + bank tokens at rest |
-| `AUTH_URL` / `NEXTAUTH_URL` | Recommended | e.g. `http://localhost:3000` |
+| `AUTH_URL` / `NEXTAUTH_URL` | Recommended | e.g. `https://YOUR_DOMAIN` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | Google social login |
 | `TWITTER_CLIENT_ID` / `TWITTER_CLIENT_SECRET` | No | X social login |
-| `TRUELAYER_CLIENT_ID` / `TRUELAYER_CLIENT_SECRET` | For live OB | TrueLayer console |
-| `TRUELAYER_ENV` | No | `sandbox` (default) or `live` |
-| `TRUELAYER_REDIRECT_URI` | Recommended | Must match console redirect URI |
+| `TRUELAYER_CLIENT_ID` | Yes for real banks | TrueLayer Console → Application |
+| `TRUELAYER_CLIENT_SECRET` | Yes for real banks | TrueLayer Console → Application |
+| `TRUELAYER_ENV` | Recommended | **`live`** (default). Use `sandbox` only for TrueLayer console mock providers while developing. |
+| `TRUELAYER_REDIRECT_URI` | Yes for bank connect | Must match Console redirect URI exactly |
 
-Without TrueLayer credentials, **Try sandbox banks** still runs a full local authorize→sync simulation so Connect Bank is never a dead end.
+Without TrueLayer credentials, the UI shows a clear **Connect your bank** empty state explaining how to add live credentials — it does **not** push mock Revolut/Monzo/Starling as the primary path.
 
-## TrueLayer setup (UK/EU Open Banking)
+## TrueLayer live setup (real UK/EU banks)
 
-1. Create an app in the [TrueLayer Console](https://console.truelayer.com/).
-2. Enable **Data API** products: accounts, balance, transactions (and cards if needed).
-3. Add redirect URIs:
+1. Create an application in the [TrueLayer Console](https://console.truelayer.com/).
+2. Use the **Live** environment (not Sandbox) for production banks such as Revolut, Monzo, Starling, and Open Banking high-street providers.
+3. Enable **Data API** products: accounts, balance, transactions (and cards if needed).
+4. Copy your **Client ID** and **Client Secret**.
+5. Add redirect URIs (exact match required):
    - Local: `http://localhost:3000/api/truelayer/callback`
-   - Vercel: `https://YOUR_DOMAIN/api/truelayer/callback`
-4. Copy **Client ID** and **Client Secret** into `.env` / Vercel env.
-5. Set `TRUELAYER_ENV=sandbox` while testing; use TrueLayer’s mock bank providers in sandbox.
-6. Set `TRUELAYER_ENV=live` for production UK/EU banks (Revolut, Monzo, Starling, high-street, etc.). Coverage depends on your TrueLayer plan and provider availability.
+   - Production: `https://YOUR_DOMAIN/api/truelayer/callback`
+6. Set environment variables:
 
-### Connect flow (what we ship)
+```bash
+TRUELAYER_CLIENT_ID=...
+TRUELAYER_CLIENT_SECRET=...
+TRUELAYER_ENV=live
+TRUELAYER_REDIRECT_URI=https://YOUR_DOMAIN/api/truelayer/callback
+AUTH_URL=https://YOUR_DOMAIN
+```
 
-1. User clicks **Connect with TrueLayer** (or picks a sandbox bank).
-2. Browser redirects to TrueLayer Auth → user selects institution → authorizes in bank website/app (OAuth).
+7. Redeploy / restart the app, sign in, and click **Connect your bank**.
+
+Coverage of specific banks depends on your TrueLayer plan and provider availability (`providers=uk-ob-all`).
+
+### Advanced: TrueLayer sandbox
+
+For TrueLayer’s own mock providers during integration testing, set `TRUELAYER_ENV=sandbox` and use sandbox credentials/redirects from the Console. This is a **dev note only** — the product UI defaults to live messaging.
+
+### Connect flow
+
+1. User clicks **Connect your bank**.
+2. Browser redirects to TrueLayer Auth → user selects institution → authorises in bank website/app.
 3. Callback hits `/api/truelayer/callback` → code exchanged for tokens → tokens stored **encrypted** (AES-256-GCM with `AUTH_SECRET`).
-4. `/data/v1/accounts`, balances, and transactions are pulled and mapped into `Account` + `Transaction`.
-5. **Sync now** refreshes on demand; `/api/truelayer/webhook` is a stub for TrueLayer data webhooks / periodic jobs in production.
-
-### Production upgrade notes
-
-- Move `DATABASE_URL` to Postgres; set Prisma `provider = "postgresql"`.
-- Use `TRUELAYER_ENV=live` and production redirect URIs.
-- Register webhook URL `https://YOUR_DOMAIN/api/truelayer/webhook` in TrueLayer console.
-- Optionally schedule a cron (Vercel Cron) that POSTs `/api/truelayer/sync` for each user connection.
-
-### Plaid EU (alternative)
-
-Plaid also supports UK/EU institutions. This app’s **working** Connect Bank path is TrueLayer. You can evaluate Plaid EU later; env placeholders are listed in `.env.example` for reference only.
+4. Accounts, balances, and transactions are pulled into Prisma models.
+5. **Sync now** refreshes all active TrueLayer connections; last synced time is shown on the Connect card.
 
 ## Social login setup
 
 ### Google
 
-1. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → OAuth client (Web).
-2. Authorized redirect URI: `http://localhost:3000/api/auth/callback/google` and `https://YOUR_DOMAIN/api/auth/callback/google`.
+1. [Google Cloud Console](https://console.cloud.google.com/) → OAuth client (Web).
+2. Redirect: `https://YOUR_DOMAIN/api/auth/callback/google`
 3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 ### X (Twitter)
 
-1. [X Developer Portal](https://developer.x.com/) → Project/App → User authentication OAuth 2.0.
-2. Callback: `http://localhost:3000/api/auth/callback/twitter` and production equivalent.
+1. [X Developer Portal](https://developer.x.com/) → OAuth 2.0.
+2. Callback: `https://YOUR_DOMAIN/api/auth/callback/twitter`
 3. Set `TWITTER_CLIENT_ID` and `TWITTER_CLIENT_SECRET`.
-4. Request email permission; if X does not return email, linking cannot complete (error shown on login).
-
-### Account linking
-
-If a user already registered with email/password and later signs in with Google/X using the **same email**, we link to the existing user (`allowDangerousEmailAccountLinking`). Limitation: providers that omit email cannot be linked safely; OAuth-only users can later set a password via register with the same email.
 
 ## CSV import
 
@@ -114,24 +117,13 @@ date,amount,type,category,merchant,description,account
 
 See `sample-transactions.csv`.
 
-## Push to GitHub
-
-```bash
-git init
-git add .
-git commit -m "Initial SpendWise app"
-gh repo create spending_tracker --private --source=. --remote=origin --push
-```
-
-Do not commit `.env`.
-
 ## Deploy on Vercel
 
 1. Import the GitHub repo.
-2. Use **Postgres** (Neon/Supabase/Vercel Postgres). Change Prisma datasource `provider` to `postgresql`.
-3. Set env vars: `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL=https://YOUR_DOMAIN`, optional Google/X/TrueLayer.
-4. Build command: `prisma generate && prisma db push && next build` (or run `db push` once against prod).
-5. Add TrueLayer + OAuth callback URLs for the production domain.
+2. Use **Postgres** (Neon/Supabase/Vercel Postgres).
+3. Set env vars: `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL=https://YOUR_DOMAIN`, TrueLayer live vars, optional Google/X.
+4. Build: `prisma generate && prisma db push && next build`.
+5. Register TrueLayer + OAuth callback URLs for the production domain.
 
 ## License
 

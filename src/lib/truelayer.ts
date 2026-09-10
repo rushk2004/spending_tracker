@@ -3,7 +3,8 @@ import { encrypt, decrypt } from "./crypto";
 export type TrueLayerEnv = "sandbox" | "live";
 
 export function getTrueLayerEnv(): TrueLayerEnv {
-  return process.env.TRUELAYER_ENV === "live" ? "live" : "sandbox";
+  // Live-first: only use sandbox when explicitly set
+  return process.env.TRUELAYER_ENV === "sandbox" ? "sandbox" : "live";
 }
 
 export function isTrueLayerConfigured() {
@@ -14,7 +15,6 @@ export function getTrueLayerStatus() {
   return {
     configured: isTrueLayerConfigured(),
     env: getTrueLayerEnv(),
-    mockAvailable: true,
     redirectUri: getRedirectUri(),
   };
 }
@@ -44,9 +44,8 @@ export function buildConnectUrl(state: string) {
     client_id: process.env.TRUELAYER_CLIENT_ID!,
     redirect_uri: getRedirectUri(),
     scope: "info accounts balance cards transactions offline_access",
-    providers: "uk-ob-all uk-oauth-all",
+    providers: "uk-ob-all",
     state,
-    // Sandbox mock bank is available in console; users can also pick Revolut/Monzo etc. in live
   });
   return `${getAuthBase()}/?${params.toString()}`;
 }
@@ -171,7 +170,7 @@ export function mapAccountType(tlType?: string): "checking" | "savings" | "credi
   return "checking";
 }
 
-/** Local sandbox demo data when TrueLayer credentials are absent or mock connect is used */
+/** Dev-only mock bank bundle (not exposed in primary Connect bank UI) */
 export function buildMockBankBundle(institution: "revolut" | "monzo" | "starling" = "revolut") {
   const names = {
     revolut: { id: "revolut", name: "Revolut" },

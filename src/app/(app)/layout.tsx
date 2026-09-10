@@ -10,7 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-screen bg-[#070b14] text-slate-100">
+    <div className="flex min-h-screen bg-background text-zinc-100">
       <div className="hidden md:block md:fixed md:inset-y-0 md:left-0 md:z-30">
         <Sidebar userName={session.name || session.email} />
       </div>

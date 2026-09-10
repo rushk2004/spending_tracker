@@ -2,16 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Landmark, RefreshCw, Unplug, Building2 } from "lucide-react";
+import { Landmark, RefreshCw, Unplug, Building2, AlertCircle, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { formatRelativeTime } from "@/lib/utils";
 
 type Connection = {
   id: string;
@@ -26,64 +20,67 @@ export function ConnectBankCard({
   configured,
   env,
   connections,
+  redirectUri,
 }: {
   configured: boolean;
   env: string;
   connections: Connection[];
+  redirectUri?: string;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   async function connectLive() {
     setLoading(true);
-    setMessage("");
-    if (configured) {
-      const res = await fetch("/api/truelayer/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "live" }),
+    setMessage(null);
+
+    if (!configured) {
+      setMessage({
+        type: "err",
+        text: "TrueLayer credentials are not configured on this server. Add TRUELAYER_CLIENT_ID and TRUELAYER_CLIENT_SECRET with TRUELAYER_ENV=live.",
       });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-        return;
-      }
-      setMessage(data.message || data.error || "Could not start TrueLayer");
       setLoading(false);
       return;
     }
-    setOpen(true);
-    setLoading(false);
-  }
 
-  async function connectMock(institution: "revolut" | "monzo" | "starling") {
-    setLoading(true);
-    setMessage("");
     const res = await fetch("/api/truelayer/connect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "mock", institution }),
+      body: JSON.stringify({ mode: "live" }),
     });
     const data = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setMessage(data.error || "Mock connect failed");
+    if (data.url) {
+      window.location.href = data.url;
       return;
     }
-    setOpen(false);
-    setMessage(`Synced ${data.accounts} accounts · ${data.transactions} transactions`);
-    router.refresh();
+    setMessage({
+      type: "err",
+      text: data.message || data.error || "Could not start TrueLayer Open Banking",
+    });
+    setLoading(false);
   }
 
   async function syncAll() {
-    setLoading(true);
-    const res = await fetch("/api/truelayer/sync", { method: "POST", body: "{}" });
+    setSyncing(true);
+    setMessage(null);
+    const res = await fetch("/api/truelayer/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
     const data = await res.json();
-    setLoading(false);
-    setMessage(res.ok ? `Synced · ${data.transactions ?? 0} new transactions` : data.error);
-    router.refresh();
+    setSyncing(false);
+    if (res.ok) {
+      setMessage({
+        type: "ok",
+        text: `Synced ${data.connections ?? 1} connection${(data.connections ?? 1) === 1 ? "" : "s"} · ${data.transactions ?? 0} transactions`,
+      });
+      router.refresh();
+    } else {
+      setMessage({ type: "err", text: data.error || "Sync failed" });
+    }
   }
 
   async function disconnect(id?: string) {
@@ -98,113 +95,112 @@ export function ConnectBankCard({
     router.refresh();
   }
 
+  const lastSynced = connections
+    .map((c) => c.lastSyncedAt)
+    .filter(Boolean)
+    .sort()
+    .reverse()[0];
+
   return (
-    <>
-      <Card className="border-emerald-900/40 bg-gradient-to-br from-emerald-950/30 to-slate-950/40">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Landmark className="h-4 w-4 text-emerald-400" />
-            Connect bank
-          </CardTitle>
-          <CardDescription>
-            Emma-style Open Banking via TrueLayer (UK/EU). Authorize in your bank app — balances and
-            transactions sync automatically. Manual accounts & CSV remain available as fallback.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={connectLive} disabled={loading}>
-              <Building2 className="h-4 w-4" />
-              {configured ? "Connect with TrueLayer" : "Connect bank"}
-            </Button>
-            <Button variant="secondary" onClick={() => setOpen(true)} disabled={loading}>
-              Try sandbox banks
-            </Button>
-            {connections.length > 0 && (
-              <>
-                <Button variant="outline" onClick={syncAll} disabled={loading}>
-                  <RefreshCw className="h-4 w-4" />
-                  Sync now
-                </Button>
-              </>
-            )}
+    <Card className="border-brand/20 bg-gradient-to-br from-brand-muted/40 via-surface to-surface">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Landmark className="h-4 w-4 text-brand" />
+          Connect bank
+        </CardTitle>
+        <CardDescription>
+          Secure Open Banking via TrueLayer. Authorise in your bank app — balances and transactions
+          sync into SpendWise. Manual accounts and CSV remain available as a fallback.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!configured && connections.length === 0 && (
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-sm text-amber-100/90">
+            <div className="mb-1 flex items-center gap-2 font-medium text-amber-200">
+              <AlertCircle className="h-4 w-4" />
+              TrueLayer credentials required
+            </div>
+            <p className="text-amber-100/70">
+              To connect real UK/EU banks (Revolut, Monzo, Starling, and more), set{" "}
+              <code className="rounded bg-black/30 px-1 text-xs">TRUELAYER_CLIENT_ID</code>,{" "}
+              <code className="rounded bg-black/30 px-1 text-xs">TRUELAYER_CLIENT_SECRET</code>, and{" "}
+              <code className="rounded bg-black/30 px-1 text-xs">TRUELAYER_ENV=live</code> on the
+              server. Register redirect URI{" "}
+              <code className="break-all rounded bg-black/30 px-1 text-xs">
+                {redirectUri || "/api/truelayer/callback"}
+              </code>{" "}
+              in the TrueLayer Console.
+            </p>
           </div>
+        )}
 
-          <p className="text-xs text-slate-500">
-            Mode: <span className="text-slate-300">{env}</span>
-            {configured ? " · credentials detected" : " · using local sandbox demo until credentials are set"}
-          </p>
-
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={connectLive} disabled={loading || syncing}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />}
+            {configured ? "Connect your bank" : "Connect your bank"}
+          </Button>
           {connections.length > 0 && (
-            <ul className="space-y-2">
-              {connections.map((c) => (
-                <li
-                  key={c.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm"
-                >
-                  <div>
-                    <p className="font-medium">{c.institutionName || "Bank"}</p>
-                    <p className="text-xs text-slate-500">
-                      {c.provider} · {c.accountCount} accounts
-                      {c.lastSyncedAt ? ` · synced ${new Date(c.lastSyncedAt).toLocaleString()}` : ""}
-                    </p>
-                  </div>
-                  <Button size="sm" variant="ghost" onClick={() => disconnect(c.id)} disabled={loading}>
-                    <Unplug className="h-3.5 w-3.5" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {message && <p className="text-xs text-emerald-400">{message}</p>}
-        </CardContent>
-      </Card>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Choose a bank</DialogTitle>
-            <DialogDescription>
-              {configured
-                ? "Sandbox demo institutions — or use Connect with TrueLayer for the full Open Banking authorize flow."
-                : "Local sandbox simulation (no TrueLayer keys required). Add TRUELAYER_* env vars for live Open Banking."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            {(
-              [
-                ["revolut", "Revolut"],
-                ["monzo", "Monzo"],
-                ["starling", "Starling"],
-              ] as const
-            ).map(([id, label]) => (
-              <Button
-                key={id}
-                variant="secondary"
-                className="justify-start"
-                disabled={loading}
-                onClick={() => connectMock(id)}
-              >
-                <Building2 className="h-4 w-4" />
-                {label}
-              </Button>
-            ))}
-          </div>
-          {configured && (
-            <Button
-              className="w-full"
-              disabled={loading}
-              onClick={() => {
-                setOpen(false);
-                connectLive();
-              }}
-            >
-              Continue to TrueLayer authorize
+            <Button variant="outline" onClick={syncAll} disabled={loading || syncing}>
+              {syncing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {syncing ? "Syncing…" : "Sync now"}
             </Button>
           )}
-        </DialogContent>
-      </Dialog>
-    </>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+          <span>
+            Mode: <span className="text-zinc-300">{env}</span>
+            {configured ? " · credentials ready" : " · credentials missing"}
+          </span>
+          {lastSynced && (
+            <span className="text-zinc-400">
+              Last synced {formatRelativeTime(lastSynced)}
+            </span>
+          )}
+        </div>
+
+        {connections.length > 0 && (
+          <ul className="space-y-2">
+            {connections.map((c) => (
+              <li
+                key={c.id}
+                className="flex items-center justify-between rounded-xl border border-line-soft bg-surface-muted/70 px-3 py-2.5 text-sm"
+              >
+                <div>
+                  <p className="font-medium text-zinc-100">{c.institutionName || "Bank"}</p>
+                  <p className="text-xs text-zinc-500">
+                    {c.provider === "truelayer" ? "TrueLayer" : c.provider} · {c.accountCount}{" "}
+                    account{c.accountCount === 1 ? "" : "s"}
+                    {c.lastSyncedAt ? ` · ${formatRelativeTime(c.lastSyncedAt)}` : " · never synced"}
+                  </p>
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => disconnect(c.id)} disabled={loading || syncing}>
+                  <Unplug className="h-3.5 w-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {message && (
+          <p
+            className={`flex items-start gap-2 text-xs ${
+              message.type === "ok" ? "text-brand" : "text-rose-300"
+            }`}
+          >
+            {message.type === "ok" ? (
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            )}
+            {message.text}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

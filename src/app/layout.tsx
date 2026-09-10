@@ -15,14 +15,15 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "SpendWise — Personal Spending Tracker",
-  description: "Track accounts, transactions, and spending with a polished modern finance UI.",
+  title: "SpendWise — Personal Finance",
+  description:
+    "Connect UK & EU banks with TrueLayer Open Banking. See balances, spending, and cashflow in a calm, detailed dashboard.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-[#070b14] font-sans antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-sans antialiased text-foreground`}>
         <AuthProviders>{children}</AuthProviders>
       </body>
     </html>

@@ -7,8 +7,8 @@ type Slice = { name: string; value: number; color: string };
 export function CategoryChart({ data }: { data: Slice[] }) {
   if (!data.length) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-slate-500">
-        No spending this month yet
+      <div className="flex h-64 items-center justify-center text-sm text-zinc-500">
+        No spending this period yet
       </div>
     );
   }
@@ -23,9 +23,9 @@ export function CategoryChart({ data }: { data: Slice[] }) {
             nameKey="name"
             cx="50%"
             cy="50%"
-            innerRadius={55}
-            outerRadius={85}
-            paddingAngle={2}
+            innerRadius={58}
+            outerRadius={88}
+            paddingAngle={3}
           >
             {data.map((entry, i) => (
               <Cell key={i} fill={entry.color} stroke="transparent" />
@@ -34,14 +34,15 @@ export function CategoryChart({ data }: { data: Slice[] }) {
           <Tooltip
             formatter={(value) =>
               typeof value === "number"
-                ? value.toLocaleString("en-US", { style: "currency", currency: "USD" })
+                ? value.toLocaleString("en-GB", { style: "currency", currency: "GBP" })
                 : value
             }
             contentStyle={{
-              background: "#0f172a",
-              border: "1px solid #1e293b",
-              borderRadius: 8,
-              color: "#e2e8f0",
+              background: "#1a1d24",
+              border: "1px solid #2a2e38",
+              borderRadius: 12,
+              color: "#e4e4e7",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
             }}
           />
           <Legend />

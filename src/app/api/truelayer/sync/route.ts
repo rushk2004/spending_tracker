@@ -8,23 +8,48 @@ export async function POST(req: Request) {
   if (!session?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  let connectionId = body.connectionId as string | undefined;
-
-  if (!connectionId) {
-    const latest = await prisma.bankConnection.findFirst({
-      where: { userId: session.userId, status: "active" },
-      orderBy: { updatedAt: "desc" },
-    });
-    connectionId = latest?.id;
-  }
-
-  if (!connectionId) {
-    return NextResponse.json({ error: "No bank connection" }, { status: 404 });
-  }
+  const connectionId = body.connectionId as string | undefined;
 
   try {
-    const result = await syncBankConnection(connectionId, session.userId);
-    return NextResponse.json({ ok: true, ...result });
+    if (connectionId) {
+      const result = await syncBankConnection(connectionId, session.userId);
+      return NextResponse.json({ ok: true, connections: 1, ...result });
+    }
+
+    const connections = await prisma.bankConnection.findMany({
+      where: { userId: session.userId, status: "active", provider: "truelayer" },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    if (!connections.length) {
+      return NextResponse.json({ error: "No bank connection to sync" }, { status: 404 });
+    }
+
+    let transactions = 0;
+    let accounts = 0;
+    const errors: string[] = [];
+
+    for (const conn of connections) {
+      try {
+        const result = await syncBankConnection(conn.id, session.userId);
+        transactions += result.transactions ?? 0;
+        accounts += result.accounts ?? 0;
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : "Sync failed");
+      }
+    }
+
+    if (errors.length && errors.length === connections.length) {
+      return NextResponse.json({ error: errors[0] }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      connections: connections.length,
+      transactions,
+      accounts,
+      warnings: errors.length ? errors : undefined,
+    });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Sync failed" },

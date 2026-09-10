@@ -27,7 +27,7 @@ export function DemoButton() {
     <div>
       <Button onClick={handleClick} disabled={loading} variant="secondary">
         <Sparkles className="h-4 w-4" />
-        {loading ? "Loading…" : "Load demo data"}
+        {loading ? "Loading…" : "Load sample data"}
       </Button>
       {error && <p className="mt-2 text-xs text-rose-400">{error}</p>}
     </div>

@@ -7,10 +7,18 @@ import { DemoButton } from "@/components/dashboard/demo-button";
 import { ConnectBankCard } from "@/components/banks/connect-bank";
 import { prisma } from "@/lib/prisma";
 
+const ERROR_COPY: Record<string, string> = {
+  not_configured:
+    "TrueLayer credentials are missing. Set TRUELAYER_CLIENT_ID, TRUELAYER_CLIENT_SECRET, and TRUELAYER_ENV=live.",
+  invalid_state: "Bank connect session expired. Please try Connect bank again.",
+  connect_failed: "Could not finish connecting your bank.",
+  access_denied: "You cancelled bank authorisation.",
+};
+
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams?: { bank_error?: string };
+  searchParams?: { bank_error?: string; bank_detail?: string };
 }) {
   const session = await requireUser();
   if (!session?.userId) redirect("/login");
@@ -26,18 +34,21 @@ export default async function SettingsPage({
 
   const tl = getTrueLayerStatus();
   const oauth = getOAuthAvailability();
+  const errKey = searchParams?.bank_error;
+  const errDetail = searchParams?.bank_detail;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-sm text-slate-400">Profile, bank sync, and integrations</p>
+        <h1 className="text-2xl font-semibold text-zinc-50">Settings</h1>
+        <p className="text-sm text-zinc-400">Profile, bank sync, and integrations</p>
       </div>
 
-      {searchParams?.bank_error && (
-        <Card className="border-rose-900/50">
-          <CardContent className="pt-5 text-sm text-rose-300">
-            Bank connect error: {searchParams.bank_error}
+      {errKey && (
+        <Card className="border-rose-500/30 bg-rose-500/5">
+          <CardContent className="space-y-1 pt-5 text-sm text-rose-200">
+            <p className="font-medium">{ERROR_COPY[errKey] || `Bank connect error: ${errKey}`}</p>
+            {errDetail && <p className="text-rose-200/70">{errDetail}</p>}
           </CardContent>
         </Card>
       )}
@@ -45,14 +56,14 @@ export default async function SettingsPage({
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Profile</CardTitle>
-          <CardDescription>Signed-in account (works from any device against your hosted DB)</CardDescription>
+          <CardDescription>Signed-in account</CardDescription>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           <p>
-            <span className="text-slate-500">Name:</span> {session.name || "—"}
+            <span className="text-zinc-500">Name:</span> {session.name || "—"}
           </p>
           <p>
-            <span className="text-slate-500">Email:</span> {session.email}
+            <span className="text-zinc-500">Email:</span> {session.email}
           </p>
         </CardContent>
       </Card>
@@ -60,6 +71,7 @@ export default async function SettingsPage({
       <ConnectBankCard
         configured={tl.configured}
         env={tl.env}
+        redirectUri={tl.redirectUri}
         connections={connections.map((c) => ({
           id: c.id,
           provider: c.provider,
@@ -72,15 +84,19 @@ export default async function SettingsPage({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Demo data</CardTitle>
-          <CardDescription>Sample accounts when workspace is empty</CardDescription>
+          <CardTitle className="text-base">Developer extras</CardTitle>
+          <CardDescription>
+            Optional sample data for exploring the UI without a bank link. Not used in the primary
+            Connect bank flow.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {accountCount === 0 ? (
             <DemoButton />
           ) : (
-            <p className="text-sm text-slate-400">
-              You already have {accountCount} account(s). Use Connect bank or delete accounts to reload demos.
+            <p className="text-sm text-zinc-400">
+              You already have {accountCount} account(s). Clear accounts first if you want to load
+              sample data.
             </p>
           )}
         </CardContent>
@@ -90,12 +106,17 @@ export default async function SettingsPage({
         <CardHeader>
           <CardTitle className="text-base">Environment</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1 text-sm text-slate-400">
-          <p>TrueLayer: {tl.configured ? `configured (${tl.env})` : `not configured — mock sandbox available (${tl.env})`}</p>
+        <CardContent className="space-y-1 text-sm text-zinc-400">
+          <p>
+            TrueLayer:{" "}
+            {tl.configured
+              ? `configured (${tl.env})`
+              : `not configured — set live Client ID/Secret (${tl.env} mode)`}
+          </p>
           <p>Google OAuth: {oauth.google ? "on" : "off"}</p>
           <p>X (Twitter) OAuth: {oauth.twitter ? "on" : "off"}</p>
           <p>
-            Redirect URI: <code className="text-slate-300">{tl.redirectUri}</code>
+            Redirect URI: <code className="text-zinc-300">{tl.redirectUri}</code>
           </p>
         </CardContent>
       </Card>

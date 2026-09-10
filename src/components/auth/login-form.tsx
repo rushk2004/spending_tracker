@@ -47,26 +47,30 @@ export function LoginForm({ google, twitter }: { google: boolean; twitter: boole
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#070b14] px-4">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900/20 via-transparent to-transparent" />
-      <Card className="relative z-10 w-full max-w-md border-slate-800">
+    <div className="relative flex min-h-screen items-center justify-center px-4">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-brand/10 via-transparent to-transparent" />
+      <Card className="relative z-10 w-full max-w-md border-line-soft shadow-soft">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-muted text-brand">
             <PiggyBank className="h-6 w-6" />
           </div>
-          <CardTitle>Welcome back</CardTitle>
-          <CardDescription>Sign in to SpendWise from any device</CardDescription>
+          <CardTitle className="text-xl">Welcome back to SpendWise</CardTitle>
+          <CardDescription>
+            Your personal finance overview — balances, spending, and bank sync in one calm place.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <OAuthButtons google={google} twitter={twitter} />
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-slate-800" />
+          {(google || twitter) && (
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-line-soft" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-surface px-2 text-zinc-500">or email</span>
+              </div>
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-slate-950 px-2 text-slate-500">or email</span>
-            </div>
-          </div>
+          )}
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -81,9 +85,9 @@ export function LoginForm({ google, twitter }: { google: boolean; twitter: boole
               {loading ? "Signing in…" : "Sign in"}
             </Button>
           </form>
-          <p className="text-center text-sm text-slate-400">
+          <p className="text-center text-sm text-zinc-400">
             No account?{" "}
-            <Link href="/register" className="text-emerald-400 hover:underline">
+            <Link href="/register" className="text-brand hover:underline">
               Create one
             </Link>
           </p>

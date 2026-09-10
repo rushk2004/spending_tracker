@@ -24,17 +24,17 @@ export function PeriodSelector({ value }: { value: PeriodKey }) {
   }
 
   return (
-    <div className="inline-flex rounded-lg border border-slate-800 bg-slate-950/60 p-1">
+    <div className="inline-flex rounded-xl border border-line-soft bg-surface-muted/70 p-1 shadow-soft">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => select(o.value)}
           className={cn(
-            "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+            "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
             value === o.value
-              ? "bg-emerald-500/15 text-emerald-300"
-              : "text-slate-400 hover:text-slate-200"
+              ? "bg-brand-muted text-brand"
+              : "text-zinc-400 hover:text-zinc-200"
           )}
         >
           {o.label}

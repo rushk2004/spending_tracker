@@ -32,28 +32,29 @@ export function MoneyOverview({
   accounts: AccountPeriodRow[];
 }) {
   return (
-    <div className="space-y-4">
-      <Card className="overflow-hidden border-emerald-900/30 bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/20">
-        <CardHeader>
-          <CardDescription>Together · {periodLabel}</CardDescription>
-          <CardTitle className="text-3xl font-bold tracking-tight text-white">
+    <div className="space-y-5">
+      <Card className="overflow-hidden border-brand/15 bg-gradient-to-br from-surface via-surface to-brand-muted/30">
+        <CardHeader className="pb-3">
+          <CardDescription className="text-zinc-400">Together · {periodLabel}</CardDescription>
+          <CardTitle className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
             {formatCurrency(totalBalance)}
           </CardTitle>
-          <p className="text-sm text-slate-400">Total balance across all accounts</p>
+          <p className="text-sm text-zinc-400">Total balance across all accounts</p>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Spent</p>
-              <p className="mt-1 text-xl font-semibold text-rose-300">{formatCurrency(totalSpend)}</p>
+            <div className="rounded-2xl border border-line-soft bg-surface-muted/80 p-4 shadow-soft">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Spent</p>
+              <p className="mt-1.5 text-xl font-semibold text-rose-300">{formatCurrency(totalSpend)}</p>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Income</p>
-              <p className="mt-1 text-xl font-semibold text-emerald-300">{formatCurrency(totalIncome)}</p>
+            <div className="rounded-2xl border border-line-soft bg-surface-muted/80 p-4 shadow-soft">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Income</p>
+              <p className="mt-1.5 text-xl font-semibold text-emerald-300">{formatCurrency(totalIncome)}</p>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Cashflow</p>
-              <p className={`mt-1 text-xl font-semibold ${netCashflow >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+            <div className="rounded-2xl border border-line-soft bg-surface-muted/80 p-4 shadow-soft">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Cashflow</p>
+              <p className={`mt-1.5 text-xl font-semibold ${netCashflow >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                {netCashflow >= 0 ? "+" : ""}
                 {formatCurrency(netCashflow)}
               </p>
             </div>
@@ -64,32 +65,48 @@ export function MoneyOverview({
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Each bank</CardTitle>
-            <CardDescription>Balance now · spending in {periodLabel}</CardDescription>
+            <CardTitle className="text-base">Each account</CardTitle>
+            <CardDescription>Balance now · activity in {periodLabel}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {accounts.length === 0 ? (
-              <p className="text-sm text-slate-500">No accounts yet — connect a bank or add one manually.</p>
+              <p className="text-sm text-zinc-500">No accounts yet — connect a bank or add one manually.</p>
             ) : (
               accounts.map((a) => (
                 <Link
                   key={a.id}
                   href={`/accounts/${a.id}`}
-                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/50 p-4 transition hover:border-emerald-800/60 hover:bg-slate-900/80"
+                  className="group block rounded-2xl border border-line-soft bg-surface-muted/50 p-4 transition hover:border-brand/35 hover:bg-surface-raised/60"
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-slate-100">{a.nickname}</p>
-                      <Badge variant={a.type === "credit" ? "credit" : "secondary"}>{a.type}</Badge>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-zinc-100">{a.nickname}</p>
+                        <Badge variant={a.type === "credit" ? "credit" : "secondary"}>{a.type}</Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {a.last4 ? `····${a.last4}` : a.currency}
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-500">
-                      {a.last4 ? `····${a.last4}` : a.currency} · {a.spendSharePct.toFixed(0)}% of spend
-                    </p>
+                    <div className="text-right">
+                      <p className="text-lg font-semibold text-zinc-50">{formatCurrency(a.balance, a.currency)}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-semibold text-emerald-300">{formatCurrency(a.balance)}</p>
-                    <p className="text-xs text-rose-300/90">Spent {formatCurrency(a.periodSpend)}</p>
-                    <p className="text-xs text-slate-500">In {formatCurrency(a.periodIncome)}</p>
+                  <div className="mt-3 space-y-1.5">
+                    <div className="flex justify-between text-xs text-zinc-400">
+                      <span>Spend share</span>
+                      <span>{a.spendSharePct.toFixed(0)}%</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                      <div
+                        className="h-full rounded-full bg-brand/80 transition-all"
+                        style={{ width: `${Math.min(100, Math.max(2, a.spendSharePct))}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between pt-1 text-xs">
+                      <span className="text-rose-300/90">Spent {formatCurrency(a.periodSpend, a.currency)}</span>
+                      <span className="text-emerald-300/90">In {formatCurrency(a.periodIncome, a.currency)}</span>
+                    </div>
                   </div>
                 </Link>
               ))

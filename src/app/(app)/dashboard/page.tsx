@@ -9,15 +9,34 @@ import { getTrueLayerStatus } from "@/lib/truelayer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CategoryChart } from "@/components/dashboard/category-chart";
 import { CashflowChart } from "@/components/dashboard/cashflow-chart";
-import { DemoButton } from "@/components/dashboard/demo-button";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { MoneyOverview } from "@/components/dashboard/money-overview";
 import { ConnectBankCard } from "@/components/banks/connect-bank";
 
+function mapConnections(
+  connections: {
+    id: string;
+    provider: string;
+    institutionName: string | null;
+    lastSyncedAt: Date | null;
+    accounts: unknown[];
+    status: string;
+  }[]
+) {
+  return connections.map((c) => ({
+    id: c.id,
+    provider: c.provider,
+    institutionName: c.institutionName,
+    lastSyncedAt: c.lastSyncedAt?.toISOString() || null,
+    accountCount: c.accounts.length,
+    status: c.status,
+  }));
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams?: { period?: string };
+  searchParams?: { period?: string; connected?: string };
 }) {
   const session = await requireUser();
   if (!session?.userId) redirect("/login");
@@ -82,7 +101,6 @@ export default async function DashboardPage({
   }
   const chartData = Array.from(byCat.values()).sort((a, b) => b.value - a.value);
 
-  // Cashflow by day (or by week chunks if long)
   const days = eachDayOfInterval({
     start: period.start < subDays(period.end, 31) ? subDays(period.end, 13) : period.start,
     end: period.end > new Date() ? new Date() : period.end,
@@ -100,43 +118,50 @@ export default async function DashboardPage({
 
   const tl = getTrueLayerStatus();
   const empty = accounts.length === 0;
+  const connProps = mapConnections(connections);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Money</h1>
-          <p className="text-sm text-slate-400">Together totals and per-bank breakdown · {period.label}</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">Money</h1>
+          <p className="text-sm text-zinc-400">
+            Together totals and per-account breakdown · {period.label}
+          </p>
         </div>
         <Suspense fallback={null}>
           <PeriodSelector value={periodKey} />
         </Suspense>
       </div>
 
+      {searchParams?.connected === "1" && (
+        <div className="rounded-xl border border-brand/30 bg-brand-muted px-4 py-3 text-sm text-emerald-100">
+          Bank connected successfully. Accounts and recent transactions are syncing.
+        </div>
+      )}
+
       {empty ? (
         <div className="space-y-4">
-          <Card className="border-dashed">
+          <Card className="border-dashed border-line">
             <CardHeader>
-              <CardTitle>Welcome to SpendWise</CardTitle>
+              <CardTitle>Connect your bank</CardTitle>
               <CardDescription>
-                Connect a UK/EU bank (TrueLayer) or load demo data to explore the Emma-style overview.
+                SpendWise uses TrueLayer Open Banking to securely link UK and EU banks — Revolut,
+                Monzo, Starling, and high-street providers. No mock banks here: once TrueLayer live
+                credentials are set on the server, you authorise in your real bank app.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-3">
-              <DemoButton />
+            <CardContent className="text-sm text-zinc-400">
+              Prefer not to link a bank yet? Add accounts manually or import a CSV from the
+              Transactions page. Sample data can be loaded from Settings if you just want to explore
+              the UI.
             </CardContent>
           </Card>
           <ConnectBankCard
             configured={tl.configured}
             env={tl.env}
-            connections={connections.map((c) => ({
-              id: c.id,
-              provider: c.provider,
-              institutionName: c.institutionName,
-              lastSyncedAt: c.lastSyncedAt?.toISOString() || null,
-              accountCount: c.accounts.length,
-              status: c.status,
-            }))}
+            redirectUri={tl.redirectUri}
+            connections={connProps}
           />
         </div>
       ) : (
@@ -176,21 +201,23 @@ export default async function DashboardPage({
               <CardHeader>
                 <CardTitle className="text-base">Recent activity</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-1">
                 {recent.map((t) => (
                   <div
                     key={t.id}
-                    className="flex items-center justify-between border-b border-slate-800/60 pb-3 last:border-0"
+                    className="flex items-center justify-between rounded-xl px-2 py-3 transition hover:bg-surface-raised/50"
                   >
                     <div>
-                      <p className="text-sm font-medium">{t.merchant || t.description || t.type}</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-sm font-medium text-zinc-100">
+                        {t.merchant || t.description || t.type}
+                      </p>
+                      <p className="text-xs text-zinc-500">
                         {formatDate(t.date)} · {t.account.nickname}
                         {t.category ? ` · ${t.category.name}` : ""}
                       </p>
                     </div>
                     <span
-                      className={`text-sm font-semibold ${
+                      className={`text-sm font-semibold tabular-nums ${
                         t.type === "income"
                           ? "text-emerald-400"
                           : t.type === "expense"
@@ -198,8 +225,8 @@ export default async function DashboardPage({
                             : "text-sky-400"
                       }`}
                     >
-                      {t.type === "income" ? "+" : t.type === "expense" ? "-" : ""}
-                      {formatCurrency(t.amount)}
+                      {t.type === "income" ? "+" : t.type === "expense" ? "−" : ""}
+                      {formatCurrency(t.amount, t.account.currency)}
                     </span>
                   </div>
                 ))}
@@ -208,14 +235,8 @@ export default async function DashboardPage({
             <ConnectBankCard
               configured={tl.configured}
               env={tl.env}
-              connections={connections.map((c) => ({
-                id: c.id,
-                provider: c.provider,
-                institutionName: c.institutionName,
-                lastSyncedAt: c.lastSyncedAt?.toISOString() || null,
-                accountCount: c.accounts.length,
-                status: c.status,
-              }))}
+              redirectUri={tl.redirectUri}
+              connections={connProps}
             />
           </div>
         </>

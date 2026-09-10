@@ -226,7 +226,7 @@ export function TransactionsManager({
                   required
                 />
               </div>
-              {importMsg && <p className="text-sm text-slate-300">{importMsg}</p>}
+              {importMsg && <p className="text-sm text-zinc-300">{importMsg}</p>}
               <Button type="submit" disabled={loading} className="w-full">
                 {loading ? "Importing…" : "Import"}
               </Button>
@@ -337,7 +337,7 @@ export function TransactionsManager({
       <Card>
         <CardContent className="space-y-3 pt-5">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
             <Input className="pl-9" placeholder="Search merchant or description…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -386,20 +386,20 @@ export function TransactionsManager({
 
       {!accounts.length ? (
         <Card className="border-dashed">
-          <CardContent className="py-12 text-center text-slate-400">
+          <CardContent className="py-12 text-center text-zinc-400">
             Create an account before adding transactions.
           </CardContent>
         </Card>
       ) : filtered.length === 0 ? (
         <Card className="border-dashed">
-          <CardContent className="py-12 text-center text-slate-400">
-            <p className="mb-1 font-medium text-slate-200">No matching transactions</p>
+          <CardContent className="py-12 text-center text-zinc-400">
+            <p className="mb-1 font-medium text-zinc-200">No matching transactions</p>
             <p className="text-sm">Try adjusting filters or add your first transaction.</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-800">
-          <div className="hidden grid-cols-12 gap-2 bg-slate-900/80 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-500 md:grid">
+        <div className="overflow-hidden rounded-2xl border border-line-soft bg-surface/60 shadow-card">
+          <div className="hidden grid-cols-12 gap-2 border-b border-line-soft bg-surface-muted/80 px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider text-zinc-500 md:grid">
             <div className="col-span-2">Date</div>
             <div className="col-span-3">Details</div>
             <div className="col-span-2">Account</div>
@@ -411,24 +411,24 @@ export function TransactionsManager({
           {filtered.map((t) => (
             <div
               key={t.id}
-              className="grid grid-cols-1 gap-2 border-t border-slate-800/80 px-4 py-3 text-sm md:grid-cols-12 md:items-center"
+              className="grid grid-cols-1 gap-2 border-t border-line-soft/80 px-4 py-3.5 text-sm transition hover:bg-surface-raised/40 md:grid-cols-12 md:items-center"
             >
-              <div className="md:col-span-2 text-slate-400">{formatDate(t.date)}</div>
+              <div className="md:col-span-2 text-zinc-400 tabular-nums">{formatDate(t.date)}</div>
               <div className="md:col-span-3">
-                <p className="font-medium">{t.merchant || t.description || "—"}</p>
+                <p className="font-medium text-zinc-100">{t.merchant || t.description || "—"}</p>
                 {t.merchant && t.description && (
-                  <p className="text-xs text-slate-500">{t.description}</p>
+                  <p className="text-xs text-zinc-500">{t.description}</p>
                 )}
               </div>
-              <div className="md:col-span-2 text-slate-400">{t.account.nickname}</div>
-              <div className="md:col-span-2 text-slate-400">
+              <div className="md:col-span-2 text-zinc-400">{t.account.nickname}</div>
+              <div className="md:col-span-2 text-zinc-400">
                 {t.category ? `${t.category.icon || ""} ${t.category.name}` : "—"}
               </div>
               <div className="md:col-span-1">
                 <Badge variant={typeBadge(t.type) as "income" | "expense" | "transfer"}>{t.type}</Badge>
               </div>
               <div
-                className={`md:col-span-1 md:text-right font-semibold ${
+                className={`md:col-span-1 md:text-right font-semibold tabular-nums ${
                   t.type === "income" ? "text-emerald-400" : t.type === "expense" ? "text-rose-400" : "text-sky-400"
                 }`}
               >

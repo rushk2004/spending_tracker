@@ -2,33 +2,28 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import crypto from "crypto";
 import { requireUser } from "@/lib/session";
-import { buildConnectUrl, isTrueLayerConfigured } from "@/lib/truelayer";
-import { createMockConnection } from "@/lib/bank-sync";
+import { buildConnectUrl, isTrueLayerConfigured, getTrueLayerEnv, getRedirectUri } from "@/lib/truelayer";
 
-export async function GET(req: Request) {
+const MISSING_CREDS =
+  "TrueLayer is not configured. Add TRUELAYER_CLIENT_ID and TRUELAYER_CLIENT_SECRET (live) to your environment, set TRUELAYER_ENV=live, and register your redirect URI in the TrueLayer Console.";
+
+export async function GET() {
   const session = await requireUser();
   if (!session?.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const url = new URL(req.url);
-  const mode = url.searchParams.get("mode");
-  const institution = (url.searchParams.get("institution") || "revolut") as
-    | "revolut"
-    | "monzo"
-    | "starling";
-
-  if (mode === "mock" || url.searchParams.get("demo") === "1") {
-    await createMockConnection(session.userId, institution);
-    return NextResponse.redirect(new URL("/accounts?connected=1", url.origin));
-  }
-
   if (!isTrueLayerConfigured()) {
-    return NextResponse.json({
-      configured: false,
-      mock: true,
-      message: "TrueLayer credentials missing — use mock connect for UK bank demo.",
-    });
+    return NextResponse.json(
+      {
+        configured: false,
+        error: "not_configured",
+        message: MISSING_CREDS,
+        env: getTrueLayerEnv(),
+        redirectUri: getRedirectUri(),
+      },
+      { status: 503 }
+    );
   }
 
   const state = crypto.randomBytes(16).toString("hex");
@@ -55,12 +50,20 @@ export async function POST(req: Request) {
   if (!session?.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const body = await req.json().catch(() => ({}));
-  const institution = (body.institution || "revolut") as "revolut" | "monzo" | "starling";
 
-  if (body.mode === "mock" || !isTrueLayerConfigured()) {
-    const result = await createMockConnection(session.userId, institution);
-    return NextResponse.json({ ok: true, ...result, provider: "mock" });
+  await req.json().catch(() => ({}));
+
+  if (!isTrueLayerConfigured()) {
+    return NextResponse.json(
+      {
+        configured: false,
+        error: "not_configured",
+        message: MISSING_CREDS,
+        env: getTrueLayerEnv(),
+        redirectUri: getRedirectUri(),
+      },
+      { status: 503 }
+    );
   }
 
   const state = crypto.randomBytes(16).toString("hex");
@@ -79,5 +82,9 @@ export async function POST(req: Request) {
     path: "/",
   });
 
-  return NextResponse.json({ ok: true, url: buildConnectUrl(state) });
+  return NextResponse.json({
+    ok: true,
+    url: buildConnectUrl(state),
+    env: getTrueLayerEnv(),
+  });
 }
